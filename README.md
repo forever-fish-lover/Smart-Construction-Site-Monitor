@@ -11,9 +11,4 @@ A real-time AI surveillance system for construction sites detecting PPE violatio
   - `[Q]`: Quit
 - **Model**: Custom trained YOLOv8 model / Logic-enhanced detection.
 
-## 🛠 Installation
-1. Clone the repo:
-   ```bash
-   git clone [https://github.com/{YOUR_ACCOUNT}/Smart-Construction-Site-Monitor.git](https://github.com/{YOUR_ACCOUNT}/Smart-Construction-Site-Monitor.git)
-
    
