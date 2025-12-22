@@ -13,6 +13,11 @@ MODEL_PATH = 'best.pt'       # 模型路徑
 CONFIDENCE_THRESHOLD = 0.35  # 信心度
 MERGE_DISTANCE = 50          # 合併距離
 WINDOW_NAME = "Smart Safety Monitor"
+
+# 快轉/倒轉設定
+FPS = 30                     # 假設影片是 30 FPS (若不確定可由程式自動抓)
+SKIP_SECONDS = 5             # 每次快轉/倒轉幾秒
+SKIP_FRAMES = FPS * SKIP_SECONDS
 # ==========================================
 
 DANGER_ZONE = np.array([
@@ -23,7 +28,9 @@ DANGER_ZONE = np.array([
 print("--- 系統啟動 ---")
 print("功能鍵說明：")
 print(" [P] 暫停 / 繼續")
-print(" [R] 重播影片 (歸零計數)")
+print(" [R] 重播影片")
+print(" [D] 快轉 5 秒 (>>)")
+print(" [A] 倒轉 5 秒 (<<)")
 print(" [Q] 結束程式")
 
 try:
@@ -35,10 +42,16 @@ except Exception as e:
 model_names = model.names
 cap = cv2.VideoCapture(VIDEO_PATH)
 
+# 自動取得影片的 FPS (這樣快轉才準)
+fps = cap.get(cv2.CAP_PROP_FPS)
+if fps > 0:
+    SKIP_FRAMES = int(fps * SKIP_SECONDS)
+    print(f"偵測到影片 FPS: {fps:.2f}, 每次跳轉幀數: {SKIP_FRAMES}")
+
+total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
 BAD_KEYWORDS = ['no', 'head', 'face'] 
 HUMAN_KEYWORDS = ['person', 'worker', 'head', 'helmet', 'vest', 'mask', 'no']
-
-# 狀態變數
 is_paused = False
 
 def count_violating_people(boxes):
@@ -59,73 +72,75 @@ def count_violating_people(boxes):
     return person_count
 
 while True:
-    # 1. 處理鍵盤輸入 (放在迴圈開頭或結尾都可以，這裡放開頭方便處理暫停邏輯)
+    # 1. 處理鍵盤輸入
     key = cv2.waitKey(1) & 0xFF
     
     # [Q] 結束
-    if key == ord('q') or key == 27: # 27 is Esc
+    if key == ord('q') or key == 27:
         print("結束程式。")
         break
     
-    # [P] 暫停開關
+    # [P] 暫停
     if key == ord('p'):
-        is_paused = not is_paused # 切換狀態
-        print(f"暫停狀態: {is_paused}")
-
+        is_paused = not is_paused
+    
     # [R] 重播
     if key == ord('r'):
         print("重播影片...")
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        is_paused = False # 重播時自動取消暫停
+        is_paused = False
         continue
 
-    # 檢查視窗關閉 (X 按鈕)
+    # [D] 快轉 (>>)
+    if key == ord('d'):
+        current_frame = cap.get(cv2.CAP_PROP_POS_FRAMES)
+        new_frame = min(current_frame + SKIP_FRAMES, total_frames - 1)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, new_frame)
+        print(f"快轉 >> {SKIP_SECONDS}秒")
+        
+    # [A] 倒轉 (<<)
+    if key == ord('a'):
+        current_frame = cap.get(cv2.CAP_PROP_POS_FRAMES)
+        new_frame = max(current_frame - SKIP_FRAMES, 0)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, new_frame)
+        print(f"倒轉 << {SKIP_SECONDS}秒")
+
+    # 檢查視窗關閉
     if cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
-        # 注意：剛啟動時還沒建立視窗，getProperty 可能會回傳 -1，所以要確保視窗已建立
-        # 這裡加個簡單判斷，避免程式剛跑還沒視窗就跳出
-        if cap.get(cv2.CAP_PROP_POS_FRAMES) > 1: 
-            break
+        if cap.get(cv2.CAP_PROP_POS_FRAMES) > 1: break
 
     # ==========================
-    # 暫停邏輯
+    # 暫停顯示邏輯
     # ==========================
     if is_paused:
-        # 如果暫停中，我們不讀取新影格，只顯示"PAUSED"文字
-        # 利用上一幀的 img (因為 Python 變數作用域關係，img 會保留上一圈的值)
-        # 為了不破壞原本的 img，我們畫在 copy 上
         if 'img' in locals():
             paused_img = img.copy()
-            # 畫一個半透明黑色遮罩讓畫面變暗
             overlay = paused_img.copy()
             cv2.rectangle(overlay, (0, 0), (1280, 720), (0, 0, 0), -1)
             cv2.addWeighted(overlay, 0.4, paused_img, 0.6, 0, paused_img)
-            
-            # 寫上 PAUSED
             cvzone.putTextRect(paused_img, "PAUSED", (540, 360), scale=5, thickness=5, colorR=(0, 0, 255), offset=20)
-            cvzone.putTextRect(paused_img, "Press 'P' to Continue", (520, 450), scale=2, thickness=2, colorR=(0, 0, 0), offset=10)
+            cvzone.putTextRect(paused_img, "P: Continue | R: Replay | D: >> | A: <<", (380, 450), scale=2, thickness=2, colorR=(0, 0, 0), offset=10)
             cv2.imshow(WINDOW_NAME, paused_img)
-        continue # 跳過後面的 YOLO 偵測，直接進入下一次迴圈等待按鍵
+        continue
 
     # ==========================
-    # 正常播放邏輯
+    # 正常播放
     # ==========================
     success, img = cap.read()
     if not success:
-        print("影片播放結束。 (按 'R' 重播，按 'Q' 離開)")
-        # 影片結束時自動進入暫停狀態，方便使用者決定下一步
-        is_paused = True 
+        print("影片播放結束。")
+        is_paused = True
         continue
     
     img = cv2.resize(img, (1280, 720))
 
-    # 繪製危險區域
+    # 繪製危險區
     overlay = img.copy()
     cv2.fillPoly(overlay, [DANGER_ZONE], (0, 0, 255))
     cv2.addWeighted(overlay, 0.3, img, 0.7, 0, img)
 
     # AI 偵測
     results = model(img, stream=True)
-    
     violation_boxes = []
     zone_boxes = []
 
@@ -159,19 +174,21 @@ while True:
                     zone_boxes.append([x1, y1, x2, y2])
                     cv2.rectangle(img, (x1, y1), (x2, y2), (0, 165, 255), 3)
 
-    # 計數
+    # 儀表板
     real_violation_count = count_violating_people(violation_boxes)
     real_zone_count = count_violating_people(zone_boxes)
 
-    # 儀表板
     cvzone.putTextRect(img, f'Violations: {real_violation_count}', (50, 50), scale=2, thickness=2, colorR=(0,0,255), offset=10)
+    
     bg_color = (0, 165, 255) if real_zone_count > 0 else (0, 255, 0)
     cvzone.putTextRect(img, f'Zone People: {real_zone_count}', (850, 50), scale=2, thickness=2, colorR=bg_color, offset=10)
 
     if real_zone_count > 0:
         cvzone.putTextRect(img, 'WARNING: ZONE INTRUSION', (350, 120), scale=3, thickness=3, colorR=(0,0,255), offset=20)
+    
+    # 顯示操作提示 (底部小字)
+    cv2.putText(img, "[P]Pause [R]Replay [A]<< [D]>> [Q]Quit", (400, 700), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-    # 顯示畫面
     cv2.imshow(WINDOW_NAME, img)
 
 cap.release()
