@@ -1,0 +1,19 @@
+# Smart Construction Safety Monitor 👷‍♂️🚧
+
+A real-time AI surveillance system for construction sites detecting PPE violations (No Helmet/Vest) and danger zone intrusions.
+
+## 🌟 Features
+- **Smart Counting**: Uses geometric alignment to count violations accurately (avoids double-counting the same person).
+- **Geofencing**: Detects unauthorized entry into restricted zones.
+- **Interactive Controls**:
+  - `[P]`: Pause/Continue video
+  - `[R]`: Replay video
+  - `[Q]`: Quit
+- **Model**: Custom trained YOLOv8 model / Logic-enhanced detection.
+
+## 🛠 Installation
+1. Clone the repo:
+   ```bash
+   git clone [https://github.com/{YOUR_ACCOUNT}/Smart-Construction-Site-Monitor.git](https://github.com/{YOUR_ACCOUNT}/Smart-Construction-Site-Monitor.git)
+
+   
