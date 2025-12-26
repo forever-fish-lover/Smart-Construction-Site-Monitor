@@ -9,6 +9,8 @@ A real-time AI surveillance system for construction sites detecting PPE violatio
   - `[P]`: Pause/Continue video
   - `[R]`: Replay video
   - `[Q]`: Quit
+  - `[D]`: Fast Forward 5s >>
+  - `[A]`: Rewind 5s <<
 - **Model**: Custom trained YOLOv8 model / Logic-enhanced detection.
 - **Demo Video**: [DEMO](https://youtu.be/EV67g86_x7c)
 
